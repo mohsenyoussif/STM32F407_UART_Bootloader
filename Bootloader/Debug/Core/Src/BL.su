@@ -1,0 +1,15 @@
+BL.c:10:16:uint8VerifyCRC	40	static
+BL.c:33:13:voidSendACK	24	static
+BL.c:39:13:voidSendNACK	16	static
+BL.c:47:6:BL_voidHandleGetVERCmd	32	static
+BL.c:72:6:BL_voidHandleGetHelpCmd	16	static
+BL.c:77:6:BL_voidHandleGetCIDcmd	16	static
+BL.c:83:6:BL_voidHandleGetRDPStatusCmd	16	static
+BL.c:88:6:BL_voidHandleGoToAddressCmd	16	static
+BL.c:93:6:BL_voidHandleFlashEraseCmd	16	static
+BL.c:98:6:BL_voidHandleMemWriteCmd	16	static
+BL.c:103:6:BL_voidHandleEnRWProtectCmd	16	static
+BL.c:108:6:BL_voidHandleMemReadCmd	16	static
+BL.c:113:6:BL_voidHandleReadSectorStatusCmd	16	static
+BL.c:118:6:BL_voidHandleOTPReadCmd	16	static
+BL.c:123:6:BL_voidHandleDisWRProtectCmd	16	static
