@@ -9,11 +9,20 @@ This project implements a **custom bootloader** for the STM32F407 Discovery Boar
 - Flash memory read, write, and erase operations
 - Secure boot mechanism with Read/Write protection
 
+## Bootloader Execution Flow
 
+- 1-Bootloader Mode (Firmware Update Mode)
+- If the button is not pressed (GPIO_PIN_RESET), the bootloader enters UART communication mode.
+- It listens for commands from a host tool to perform firmware updates
+- calls :
 
-## Requirements
-- **Microcontroller**: STM32F407 (or similar)
-- **Communication Interface**: UART (can be extended to other protocols)
+            Bootloader_UartReadData();
+  
+- 2-User Application Mode
+- If the button is pressed (GPIO_PIN_SET), the bootloader assumes a valid application exists and transfers control to it
+-  calls :
+
+             Bootloader_JumpToUserApp();
 
 ## Bootloader Commands
 | Command Name         | Command Code | Description                         |
@@ -30,6 +39,10 @@ This project implements a **custom bootloader** for the STM32F407 Discovery Boar
 | READ_SECTOR_STATUS  | `0x5B`       | Get flash sector protection status |
 | OTP_READ            | `0x5C`       | Read one-time programmable memory  |
 | DIS_WR_PROTECT      | `0x5D`       | Disable write protection           |
+
+## Requirements
+- **Microcontroller**: STM32F407 (or similar)
+- **Communication Interface**: UART (can be extended to other protocols)
 
 ## Host Setup
 The **PC** is used as the host to communicate with the bootloader via a selected tool. The tool sends commands and receives responses through the **UART interface**.
