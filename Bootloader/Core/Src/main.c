@@ -96,10 +96,10 @@ char HelloBootloader[]= "Hello From Bootloader\r\n" ;
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
    /*Read the button*/
- if( HAL_GPIO_ReadPin(B1_GPIO_Port, B1_Pin)== GPIO_PIN_SET)
+ if( HAL_GPIO_ReadPin(B1_GPIO_Port, B1_Pin)== GPIO_PIN_RESET)
  {
 	 Bootloader_UartReadData();
- }else if(HAL_GPIO_ReadPin(B1_GPIO_Port, B1_Pin)== GPIO_PIN_RESET)
+ }else if(HAL_GPIO_ReadPin(B1_GPIO_Port, B1_Pin)== GPIO_PIN_SET)
  {
 	 Bootloader_JumpToUserApp();
  }
@@ -361,24 +361,43 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
-/*This function is used to read commands from host*/
+/*
+ * Bootloader_UartReadData
+ * ------------------------
+ * This function continuously listens for commands from the host via UART.
+ * It follows a structured protocol:
+ *  1. Reads the first byte, which contains the length of the remaining command.
+ *  2. Reads the full command based on the received length.
+ *  3. Parses the command and executes the corresponding handler function.
+ */
 void Bootloader_UartReadData(void)
 {
-   /*Array to have the packet*/
+	/* Buffer to store the received command packet */
 	uint8_t Local_uint8CmdPacket[255] ={0};
 
+   /* Infinite loop to keep listening for commands */
 	while(1)
 	{
-		/*Clear the command packet every iteration*/
-		memset(Local_uint8CmdPacket,0,255);
+       /* Clear the command packet buffer before reading a new command */
+		memset(Local_uint8CmdPacket,0,255); // memset(array , value to put , size )
 
-		/*1st step : read the first byte which include the "Length to follow" field of the command */
+		/*
+		        * Step 1: Read the first byte from UART.
+		        * This byte contains the "Length to Follow" field, which tells how many bytes
+		        * are coming next in the packet.
+        */
 		HAL_UART_Receive(&huart2, Local_uint8CmdPacket, 1, HAL_MAX_DELAY);
 
-		/*2ND step : read the rest of the command, it's size is the previous byte value*/
+		/*
+		        * Step 2: Read the remaining bytes of the command.
+		        * It's size is the previous byte value .
+	   */
 		HAL_UART_Receive(&huart2, &Local_uint8CmdPacket[1], Local_uint8CmdPacket[0], HAL_MAX_DELAY);
 
-		/*3rd step : check the command code , then handle the command*/
+		/*
+		        * Step 3: Check the command code (second byte in the packet)
+		        * and call the corresponding handler function.
+		        */
 		switch(Local_uint8CmdPacket[1])     /*this byte includes the command code*/
 		{
 		case BL_GET_VESRION        :BL_voidHandleGetVERCmd(Local_uint8CmdPacket)                  ;        break;
@@ -398,25 +417,52 @@ void Bootloader_UartReadData(void)
 		}
 	}
 }
+
+/*
+ * Bootloader_JumpToUserApp
+ * ------------------------
+ * This function transfers execution from the Bootloader to the User Application.
+ * It achieves this by setting the MSP (Main Stack Pointer) and jumping to the
+ * Reset Handler of the user application.
+ */
 void Bootloader_JumpToUserApp(void)
 {
 	uint32_t ResetHandlerAddress ,Local_uint32MSPVal;
 
-	/*Pointer to function to hold the address of the reset handler of the user app */
+	/*
+	     * Pointer to function to hold the address of the User Application's Reset Handler.
+	     * This is required to jump to the application after setting the stack pointer.
+    */
 		void (*App_ResetHandle)(void);
 
-	/*configure MSP of user app by reading value from the first address of the VT (base address of sector 2) */
+	/*
+		     * Step 1: Configure the MSP (Main Stack Pointer) for the User Application.
+		     * The MSP value is stored at the first address of the application's Vector Table,
+		     * which is located at the base address of FLASH Sector 2.
+    */
 	Local_uint32MSPVal =  *((volatile uint32_t*)FLASH_SECTOR2_BASE_ADDRESS);
 
-	/*Write the User MSP value into MSP register*/
+	/*
+	     * Step 2: Load the User Application MSP value into the MSP register.
+	     * This ensures that the stack pointer is correctly set before executing the application.
+    */
 	__asm volatile("MSR MSP ,%0"::"r"(Local_uint32MSPVal));
 
-  /*Get the reset handler address of the user app*/
+	/*
+	     * Step 3: Retrieve the Reset Handler address of the User Application.
+	     * This is stored at the second entry in the Vector Table (offset +4 from base address).
+   */
 	ResetHandlerAddress = *((volatile uint32_t*)(FLASH_SECTOR2_BASE_ADDRESS+ 4));
-
+	/*
+	     * Step 4: Assign the Reset Handler address to the function pointer.
+	     * This allows the program to jump to the application by calling this function.
+   */
 	App_ResetHandle =(void*)ResetHandlerAddress;
 
-	/*Jump to the user App reset handler so now PC will contain the address of the reset handler of the user App*/
+	/*
+	     * Step 5: Jump to the User Application's Reset Handler.
+	     * This effectively transfers control from the Bootloader to the application.
+   */
 	App_ResetHandle();
 
 }

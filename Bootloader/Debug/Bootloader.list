@@ -37,13 +37,13 @@ Idx Name          Size      VMA       LMA       File off  Algn
                   CONTENTS, READONLY, DEBUGGING
  16 .debug_macro  00020ad5  00000000  00000000  00029978  2**0
                   CONTENTS, READONLY, DEBUGGING
- 17 .debug_line   000062d9  00000000  00000000  0004a44d  2**0
+ 17 .debug_line   000062e2  00000000  00000000  0004a44d  2**0
                   CONTENTS, READONLY, DEBUGGING
- 18 .debug_str    000c29f4  00000000  00000000  00050726  2**0
+ 18 .debug_str    000c29f5  00000000  00000000  0005072f  2**0
                   CONTENTS, READONLY, DEBUGGING
- 19 .comment      0000007b  00000000  00000000  0011311a  2**0
+ 19 .comment      0000007b  00000000  00000000  00113124  2**0
                   CONTENTS, READONLY
- 20 .debug_frame  00001afc  00000000  00000000  00113198  2**2
+ 20 .debug_frame  00001afc  00000000  00000000  001131a0  2**2
                   CONTENTS, READONLY, DEBUGGING
 
 Disassembly of section .text:
@@ -354,10 +354,10 @@ Disassembly of section .text:
  80004c6:	bf00      	nop
 
 080004c8 <uint8VerifyCRC>:
+ *         - CRC_FAIL    (if calculated CRC does not match)
+ */
 
 
-extern CRC_HandleTypeDef hcrc;
-extern UART_HandleTypeDef huart2;
 static uint8_t uint8VerifyCRC(uint8_t* copy_puint8dataArr,uint8_t copy_uint8Length,uint32_t copy_uint32HostCRC)
 {
  80004c8:	b580      	push	{r7, lr}
@@ -367,20 +367,26 @@ static uint8_t uint8VerifyCRC(uint8_t* copy_puint8dataArr,uint8_t copy_uint8Leng
  80004d0:	460b      	mov	r3, r1
  80004d2:	607a      	str	r2, [r7, #4]
  80004d4:	72fb      	strb	r3, [r7, #11]
-	uint8_t Local_uint8Iterator , Local_uint8CRCStatus ;
-	uint32_t Local_uint8AccCRC   , Local_uint8Temp;
+
+	 /*
+	     * Step 1: Compute the CRC for the given data.
+	     * The function iterates through each byte of the data array, accumulating the CRC value.
+	     */
 	for(Local_uint8Iterator = 0 ; Local_uint8Iterator < copy_uint8Length; Local_uint8Iterator++)
  80004d6:	2300      	movs	r3, #0
  80004d8:	77fb      	strb	r3, [r7, #31]
  80004da:	e00f      	b.n	80004fc <uint8VerifyCRC+0x34>
 	{
-		Local_uint8Temp = copy_puint8dataArr[Local_uint8Iterator];
+		/* Load the current byte from the data array into a temporary variable */
+		Local_uint32Temp = copy_puint8dataArr[Local_uint8Iterator];
  80004dc:	7ffb      	ldrb	r3, [r7, #31]
  80004de:	68fa      	ldr	r2, [r7, #12]
  80004e0:	4413      	add	r3, r2
  80004e2:	781b      	ldrb	r3, [r3, #0]
  80004e4:	617b      	str	r3, [r7, #20]
-		Local_uint8AccCRC = HAL_CRC_Accumulate(&hcrc, &Local_uint8Temp, 1);
+
+		 /* Accumulate the CRC for the current byte */
+		Local_uint8AccCRC = HAL_CRC_Accumulate(&hcrc, &Local_uint32Temp, 1);
  80004e6:	f107 0314 	add.w	r3, r7, #20
  80004ea:	2201      	movs	r2, #1
  80004ec:	4619      	mov	r1, r3
@@ -395,29 +401,38 @@ static uint8_t uint8VerifyCRC(uint8_t* copy_puint8dataArr,uint8_t copy_uint8Leng
  80004fe:	7afb      	ldrb	r3, [r7, #11]
  8000500:	429a      	cmp	r2, r3
  8000502:	d3eb      	bcc.n	80004dc <uint8VerifyCRC+0x14>
-	}
-	/*Reset the CRC calculation unit because every time i call this function , it start calculate from the beggening*/
+
+	/*
+	     * Step 2: Reset the CRC calculation unit.
+	     * This ensures that every time this function is called, it starts calculation from the beginning.
+	 */
 	__HAL_CRC_RESET_HANDLE_STATE(&hcrc);
  8000504:	4b08      	ldr	r3, [pc, #32]	; (8000528 <uint8VerifyCRC+0x60>)
  8000506:	2200      	movs	r2, #0
  8000508:	715a      	strb	r2, [r3, #5]
 
+	/*
+	     * Step 3: Compare the computed CRC with the expected CRC from the Host.
+	     * If they match, the CRC check is successful; otherwise, it fails.
+	*/
 	if(Local_uint8AccCRC == copy_uint32HostCRC)
  800050a:	69ba      	ldr	r2, [r7, #24]
  800050c:	687b      	ldr	r3, [r7, #4]
  800050e:	429a      	cmp	r2, r3
  8000510:	d102      	bne.n	8000518 <uint8VerifyCRC+0x50>
 	{
-		Local_uint8CRCStatus = CRC_SUCCESS ;
+		Local_uint8CRCStatus = CRC_SUCCESS ;   /* CRC verification passed */
  8000512:	2301      	movs	r3, #1
  8000514:	77bb      	strb	r3, [r7, #30]
  8000516:	e001      	b.n	800051c <uint8VerifyCRC+0x54>
 	}else
 	{
-		Local_uint8CRCStatus = CRC_FAIL ;
+		Local_uint8CRCStatus = CRC_FAIL ;     /* CRC verification failed */
  8000518:	2300      	movs	r3, #0
  800051a:	77bb      	strb	r3, [r7, #30]
 	}
+
+	/* Step 4: Return the verification result (CRC_SUCCESS or CRC_FAIL) */
 	return Local_uint8CRCStatus  ;
  800051c:	7fbb      	ldrb	r3, [r7, #30]
 }
@@ -429,8 +444,10 @@ static uint8_t uint8VerifyCRC(uint8_t* copy_puint8dataArr,uint8_t copy_uint8Leng
  8000528:	20000028 	.word	0x20000028
 
 0800052c <voidSendACK>:
+ *     [1] -> Length of the response data that follows
+ * - It then transmits this buffer over UART to notify the Host.
+ */
 
-/*this function send ACK + length to follow */
 static void voidSendACK(uint8_t copy_uint8ReplyeLngth)
 {
  800052c:	b580      	push	{r7, lr}
@@ -438,13 +455,15 @@ static void voidSendACK(uint8_t copy_uint8ReplyeLngth)
  8000530:	af00      	add	r7, sp, #0
  8000532:	4603      	mov	r3, r0
  8000534:	71fb      	strb	r3, [r7, #7]
-     uint8_t Local_uint8AckBuffer[2] = {BL_ACK ,copy_uint8ReplyeLngth };
+    /* Buffer to hold the ACK response and the length of the following response */
+    uint8_t Local_uint8AckBuffer[2] = {BL_ACK, copy_uint8ReplyeLngth};
  8000536:	23a5      	movs	r3, #165	; 0xa5
  8000538:	733b      	strb	r3, [r7, #12]
  800053a:	79fb      	ldrb	r3, [r7, #7]
  800053c:	737b      	strb	r3, [r7, #13]
 
-     HAL_UART_Transmit(&huart2, Local_uint8AckBuffer, 2, HAL_MAX_DELAY);
+    /* Send ACK response via UART */
+    HAL_UART_Transmit(&huart2, Local_uint8AckBuffer, 2, HAL_MAX_DELAY);
  800053e:	f107 010c 	add.w	r1, r7, #12
  8000542:	f04f 33ff 	mov.w	r3, #4294967295
  8000546:	2202      	movs	r2, #2
@@ -459,16 +478,22 @@ static void voidSendACK(uint8_t copy_uint8ReplyeLngth)
  8000558:	20000030 	.word	0x20000030
 
 0800055c <voidSendNACK>:
+ * - The function prepares a single-byte buffer containing BL_NACK.
+ * - It then transmits this NACK response over UART to notify the Host of the failure.
+ */
+
 static void voidSendNACK(void)
 {
  800055c:	b580      	push	{r7, lr}
  800055e:	b082      	sub	sp, #8
  8000560:	af00      	add	r7, sp, #0
-	uint8_t Local_uint8NAck = BL_NACK ;
+    /* Buffer holding the NACK response */
+    uint8_t Local_uint8NAck = BL_NACK;
  8000562:	237f      	movs	r3, #127	; 0x7f
  8000564:	71fb      	strb	r3, [r7, #7]
 
-	 HAL_UART_Transmit(&huart2, &Local_uint8NAck, 1, HAL_MAX_DELAY);
+    /* Send NACK response via UART */
+    HAL_UART_Transmit(&huart2, &Local_uint8NAck, 1, HAL_MAX_DELAY);
  8000566:	1df9      	adds	r1, r7, #7
  8000568:	f04f 33ff 	mov.w	r3, #4294967295
  800056c:	2201      	movs	r2, #1
@@ -482,33 +507,38 @@ static void voidSendNACK(void)
  800057c:	20000030 	.word	0x20000030
 
 08000580 <BL_voidHandleGetVERCmd>:
-
-
+ * Return:
+ * -------
+ * @return None.
+ */
 void BL_voidHandleGetVERCmd(uint8_t* copy_puint8CmdPacket)
 {
  8000580:	b580      	push	{r7, lr}
  8000582:	b086      	sub	sp, #24
  8000584:	af00      	add	r7, sp, #0
  8000586:	6078      	str	r0, [r7, #4]
-	uint8_t Local_uint8BLVersion , Local_uint8CRCStatus , Local_uint8CmdLen ;
-	uint32_t Local_uint32HostCRC ;
+    uint8_t Local_uint8BLVersion, Local_uint8CRCStatus;
+    uint8_t Local_uint8CmdLen; // this variabke to extract command length
+    uint32_t Local_uint32HostCRC; // this variable to extract host CRC
 
-	Local_uint8CmdLen = copy_puint8CmdPacket[0]+1; /*the first byte already inclues the length to follow*/
+    /* Extract command length (first byte includes "Length to follow") */
+    Local_uint8CmdLen = copy_puint8CmdPacket[0] + 1;
  8000588:	687b      	ldr	r3, [r7, #4]
  800058a:	781b      	ldrb	r3, [r3, #0]
  800058c:	3301      	adds	r3, #1
  800058e:	75fb      	strb	r3, [r7, #23]
 
-	 Local_uint32HostCRC = *((uint32_t*)(copy_puint8CmdPacket + Local_uint8CmdLen -4 ));
+    /* Extract CRC from the last 4 bytes of the received packet */
+    Local_uint32HostCRC = *((uint32_t*)(copy_puint8CmdPacket + Local_uint8CmdLen - 4));
  8000590:	7dfb      	ldrb	r3, [r7, #23]
  8000592:	3b04      	subs	r3, #4
  8000594:	687a      	ldr	r2, [r7, #4]
  8000596:	4413      	add	r3, r2
  8000598:	681b      	ldr	r3, [r3, #0]
  800059a:	613b      	str	r3, [r7, #16]
-     /*Verify CRC*/
 
-	 Local_uint8CRCStatus = uint8VerifyCRC(copy_puint8CmdPacket, (Local_uint8CmdLen-4), Local_uint32HostCRC);
+    /* Verify CRC of the received command */
+    Local_uint8CRCStatus = uint8VerifyCRC(copy_puint8CmdPacket, (Local_uint8CmdLen - 4), Local_uint32HostCRC);
  800059c:	7dfb      	ldrb	r3, [r7, #23]
  800059e:	3b04      	subs	r3, #4
  80005a0:	b2db      	uxtb	r3, r3
@@ -519,32 +549,34 @@ void BL_voidHandleGetVERCmd(uint8_t* copy_puint8CmdPacket)
  80005ac:	4603      	mov	r3, r0
  80005ae:	73fb      	strb	r3, [r7, #15]
 
-	 if(Local_uint8CRCStatus == CRC_SUCCESS)
+    if (Local_uint8CRCStatus == CRC_SUCCESS)
  80005b0:	7bfb      	ldrb	r3, [r7, #15]
  80005b2:	2b01      	cmp	r3, #1
  80005b4:	d10d      	bne.n	80005d2 <BL_voidHandleGetVERCmd+0x52>
-	 {
-		 voidSendACK(1u); /*Bootloader version has size of 1 byte*/
+    {
+        /* Send ACK with the length of the response payload (1 byte for version) */
+        voidSendACK(1u);
  80005b6:	2001      	movs	r0, #1
  80005b8:	f7ff ffb8 	bl	800052c <voidSendACK>
 
-		 Local_uint8BLVersion = BL_VERSION ;
+        /* Send the bootloader version */
+        Local_uint8BLVersion = BL_VERSION;
  80005bc:	2301      	movs	r3, #1
  80005be:	73bb      	strb	r3, [r7, #14]
-		 HAL_UART_Transmit(&huart2, &Local_uint8BLVersion, 1, HAL_MAX_DELAY);
+        HAL_UART_Transmit(&huart2, &Local_uint8BLVersion, 1, HAL_MAX_DELAY);
  80005c0:	f107 010e 	add.w	r1, r7, #14
  80005c4:	f04f 33ff 	mov.w	r3, #4294967295
  80005c8:	2201      	movs	r2, #1
  80005ca:	4805      	ldr	r0, [pc, #20]	; (80005e0 <BL_voidHandleGetVERCmd+0x60>)
  80005cc:	f001 fc9b 	bl	8001f06 <HAL_UART_Transmit>
-	 }else
-	 {
-		 voidSendNACK();
-	 }
-
+    else
+    {
+        /* Send NACK if CRC verification fails */
+        voidSendNACK();
+    }
 }
  80005d0:	e001      	b.n	80005d6 <BL_voidHandleGetVERCmd+0x56>
-		 voidSendNACK();
+        voidSendNACK();
  80005d2:	f7ff ffc3 	bl	800055c <voidSendNACK>
 }
  80005d6:	bf00      	nop
@@ -555,6 +587,7 @@ void BL_voidHandleGetVERCmd(uint8_t* copy_puint8CmdPacket)
  80005e0:	20000030 	.word	0x20000030
 
 080005e4 <BL_voidHandleGetHelpCmd>:
+
 
 void BL_voidHandleGetHelpCmd(uint8_t* copy_puint8CmdPacket)
 {
@@ -777,23 +810,23 @@ char HelloBootloader[]= "Hello From Bootloader\r\n" ;
  80006e8:	f000 f8a4 	bl	8000834 <MX_USART2_UART_Init>
   /* USER CODE BEGIN 2 */
    /*Read the button*/
- if( HAL_GPIO_ReadPin(B1_GPIO_Port, B1_Pin)== GPIO_PIN_SET)
+ if( HAL_GPIO_ReadPin(B1_GPIO_Port, B1_Pin)== GPIO_PIN_RESET)
  80006ec:	2101      	movs	r1, #1
  80006ee:	4810      	ldr	r0, [pc, #64]	; (8000730 <main+0x70>)
  80006f0:	f000 ff28 	bl	8001544 <HAL_GPIO_ReadPin>
  80006f4:	4603      	mov	r3, r0
- 80006f6:	2b01      	cmp	r3, #1
+ 80006f6:	2b00      	cmp	r3, #0
  80006f8:	d102      	bne.n	8000700 <main+0x40>
  {
 	 Bootloader_UartReadData();
  80006fa:	f000 fa25 	bl	8000b48 <Bootloader_UartReadData>
  80006fe:	e008      	b.n	8000712 <main+0x52>
- }else if(HAL_GPIO_ReadPin(B1_GPIO_Port, B1_Pin)== GPIO_PIN_RESET)
+ }else if(HAL_GPIO_ReadPin(B1_GPIO_Port, B1_Pin)== GPIO_PIN_SET)
  8000700:	2101      	movs	r1, #1
  8000702:	480b      	ldr	r0, [pc, #44]	; (8000730 <main+0x70>)
  8000704:	f000 ff1e 	bl	8001544 <HAL_GPIO_ReadPin>
  8000708:	4603      	mov	r3, r0
- 800070a:	2b00      	cmp	r3, #0
+ 800070a:	2b01      	cmp	r3, #1
  800070c:	d101      	bne.n	8000712 <main+0x52>
  {
 	 Bootloader_JumpToUserApp();
@@ -1489,16 +1522,16 @@ static void MX_GPIO_Init(void)
  8000b44:	10120000 	.word	0x10120000
 
 08000b48 <Bootloader_UartReadData>:
-
-/* USER CODE BEGIN 4 */
-
-/*This function is used to read commands from host*/
+ *  1. Reads the first byte, which contains the length of the remaining command.
+ *  2. Reads the full command based on the received length.
+ *  3. Parses the command and executes the corresponding handler function.
+ */
 void Bootloader_UartReadData(void)
 {
  8000b48:	b580      	push	{r7, lr}
  8000b4a:	b0c0      	sub	sp, #256	; 0x100
  8000b4c:	af00      	add	r7, sp, #0
-   /*Array to have the packet*/
+	/* Buffer to store the received command packet */
 	uint8_t Local_uint8CmdPacket[255] ={0};
  8000b4e:	463b      	mov	r3, r7
  8000b50:	4618      	mov	r0, r3
@@ -1507,17 +1540,21 @@ void Bootloader_UartReadData(void)
  8000b56:	2100      	movs	r1, #0
  8000b58:	f001 fefe 	bl	8002958 <memset>
 
+   /* Infinite loop to keep listening for commands */
 	while(1)
 	{
-		/*Clear the command packet every iteration*/
-		memset(Local_uint8CmdPacket,0,255);
+       /* Clear the command packet buffer before reading a new command */
+		memset(Local_uint8CmdPacket,0,255); // memset(array , value to put , size )
  8000b5c:	463b      	mov	r3, r7
  8000b5e:	22ff      	movs	r2, #255	; 0xff
  8000b60:	2100      	movs	r1, #0
  8000b62:	4618      	mov	r0, r3
  8000b64:	f001 fef8 	bl	8002958 <memset>
-
-		/*1st step : read the first byte which include the "Length to follow" field of the command */
+		/*
+		        * Step 1: Read the first byte from UART.
+		        * This byte contains the "Length to Follow" field, which tells how many bytes
+		        * are coming next in the packet.
+        */
 		HAL_UART_Receive(&huart2, Local_uint8CmdPacket, 1, HAL_MAX_DELAY);
  8000b68:	4639      	mov	r1, r7
  8000b6a:	f04f 33ff 	mov.w	r3, #4294967295
@@ -1525,7 +1562,10 @@ void Bootloader_UartReadData(void)
  8000b70:	4836      	ldr	r0, [pc, #216]	; (8000c4c <Bootloader_UartReadData+0x104>)
  8000b72:	f001 fa61 	bl	8002038 <HAL_UART_Receive>
 
-		/*2ND step : read the rest of the command, it's size is the previous byte value*/
+		/*
+		        * Step 2: Read the remaining bytes of the command.
+		        * It's size is the previous byte value .
+	   */
 		HAL_UART_Receive(&huart2, &Local_uint8CmdPacket[1], Local_uint8CmdPacket[0], HAL_MAX_DELAY);
  8000b76:	463b      	mov	r3, r7
  8000b78:	781b      	ldrb	r3, [r3, #0]
@@ -1536,7 +1576,10 @@ void Bootloader_UartReadData(void)
  8000b84:	4831      	ldr	r0, [pc, #196]	; (8000c4c <Bootloader_UartReadData+0x104>)
  8000b86:	f001 fa57 	bl	8002038 <HAL_UART_Receive>
 
-		/*3rd step : check the command code , then handle the command*/
+		/*
+		        * Step 3: Check the command code (second byte in the packet)
+		        * and call the corresponding handler function.
+		        */
 		switch(Local_uint8CmdPacket[1])     /*this byte includes the command code*/
  8000b8a:	463b      	mov	r3, r7
  8000b8c:	785b      	ldrb	r3, [r3, #1]
@@ -1623,45 +1666,58 @@ void Bootloader_UartReadData(void)
 
 		default : /*Invalid command from host */ break ;
  8000c48:	bf00      	nop
-		memset(Local_uint8CmdPacket,0,255);
+		memset(Local_uint8CmdPacket,0,255); // memset(array , value to put , size )
  8000c4a:	e787      	b.n	8000b5c <Bootloader_UartReadData+0x14>
  8000c4c:	20000030 	.word	0x20000030
 
 08000c50 <Bootloader_JumpToUserApp>:
-		}
-	}
-}
+ * This function transfers execution from the Bootloader to the User Application.
+ * It achieves this by setting the MSP (Main Stack Pointer) and jumping to the
+ * Reset Handler of the user application.
+ */
 void Bootloader_JumpToUserApp(void)
 {
  8000c50:	b580      	push	{r7, lr}
  8000c52:	b084      	sub	sp, #16
  8000c54:	af00      	add	r7, sp, #0
-
-	/*Pointer to function to hold the address of the reset handler of the user app */
-		void (*App_ResetHandle)(void);
-
-	/*configure MSP of user app by reading value from the first address of the VT (base address of sector 2) */
+	/*
+		     * Step 1: Configure the MSP (Main Stack Pointer) for the User Application.
+		     * The MSP value is stored at the first address of the application's Vector Table,
+		     * which is located at the base address of FLASH Sector 2.
+    */
 	Local_uint32MSPVal =  *((volatile uint32_t*)FLASH_SECTOR2_BASE_ADDRESS);
  8000c56:	4b08      	ldr	r3, [pc, #32]	; (8000c78 <Bootloader_JumpToUserApp+0x28>)
  8000c58:	681b      	ldr	r3, [r3, #0]
  8000c5a:	60fb      	str	r3, [r7, #12]
 
-	/*Write the User MSP value into MSP register*/
+	/*
+	     * Step 2: Load the User Application MSP value into the MSP register.
+	     * This ensures that the stack pointer is correctly set before executing the application.
+    */
 	__asm volatile("MSR MSP ,%0"::"r"(Local_uint32MSPVal));
  8000c5c:	68fb      	ldr	r3, [r7, #12]
  8000c5e:	f383 8808 	msr	MSP, r3
 
-  /*Get the reset handler address of the user app*/
+	/*
+	     * Step 3: Retrieve the Reset Handler address of the User Application.
+	     * This is stored at the second entry in the Vector Table (offset +4 from base address).
+   */
 	ResetHandlerAddress = *((volatile uint32_t*)(FLASH_SECTOR2_BASE_ADDRESS+ 4));
  8000c62:	4b06      	ldr	r3, [pc, #24]	; (8000c7c <Bootloader_JumpToUserApp+0x2c>)
  8000c64:	681b      	ldr	r3, [r3, #0]
  8000c66:	60bb      	str	r3, [r7, #8]
-
+	/*
+	     * Step 4: Assign the Reset Handler address to the function pointer.
+	     * This allows the program to jump to the application by calling this function.
+   */
 	App_ResetHandle =(void*)ResetHandlerAddress;
  8000c68:	68bb      	ldr	r3, [r7, #8]
  8000c6a:	607b      	str	r3, [r7, #4]
 
-	/*Jump to the user App reset handler so now PC will contain the address of the reset handler of the user App*/
+	/*
+	     * Step 5: Jump to the User Application's Reset Handler.
+	     * This effectively transfers control from the Bootloader to the application.
+   */
 	App_ResetHandle();
  8000c6c:	687b      	ldr	r3, [r7, #4]
  8000c6e:	4798      	blx	r3
