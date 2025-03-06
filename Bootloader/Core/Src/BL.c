@@ -260,26 +260,54 @@ void BL_voidHandleGetHelpCmd(uint8_t* copy_puint8CmdPacket)
 	}
 }
 
+
+/*
+ * BL_voidHandleGetCIDcmd
+ * ----------------------
+ * This function handles the "Get Chip ID" command from the host.
+ * It extracts the Chip ID (CID) from the MCU's IDCODE register and sends it back.
+ *
+ * Parameters:
+ * -----------
+ * @param copy_puint8CmdPacket : Pointer to the received command packet.
+ *
+ * Behavior:
+ * ---------
+ * 1. Extracts the length of the command from the first byte.
+ * 2. Retrieves the expected CRC from the last 4 bytes of the packet.
+ * 3. Verifies the CRC of the received data.
+ * 4. If CRC is valid:
+ *    - Reads the Chip ID from the `DBGMCU_IDCODE_REGISTER`.
+ *    - Sends an ACK response to indicate success.
+ *    - Transmits the Chip ID (2 bytes) to the host.
+ * 5. If CRC verification fails, it sends a NACK response.
+ */
 void BL_voidHandleGetCIDcmd(uint8_t* copy_puint8CmdPacket)
 {
 	uint8_t Local_uint8CRCStatus;
 	uint8_t Local_uint8CmdLen; // this variable to extract command length
+	uint16_t Local_uint16CID ; // Variable to hold the extracted Chip ID
 	uint32_t Local_uint32HostCRC; // this variable to extract host CRC
 
-	/* Extract command length (first byte includes "Length to follow") */
+	/* Step 1: Extract command length (first byte includes "Length to follow") */
 	Local_uint8CmdLen = copy_puint8CmdPacket[0] + 1;
 
-	/* Extract CRC from the last 4 bytes of the received packet */
+	/* Step 2: Extract CRC from the last 4 bytes of the received packet */
 	Local_uint32HostCRC = *((uint32_t*)(copy_puint8CmdPacket + Local_uint8CmdLen - 4));
 
-	/* Verify CRC of the received command */
+	/* Step 3: Verify CRC of the received command */
 	Local_uint8CRCStatus = uint8VerifyCRC(copy_puint8CmdPacket, (Local_uint8CmdLen - 4), Local_uint32HostCRC);
 
 	if (Local_uint8CRCStatus == CRC_SUCCESS)
 	{
-		/* Send ACK with the length of the response payload (1 byte for version) */
-		voidSendACK(1u);
+		/* Step 4: Retrieve Chip ID (12-bit value from the DBGMCU_IDCODE register) */
+		Local_uint16CID = DBGMCU_IDCODE_REGISTER & 0x0fff;
 
+		/* Step 5: Send ACK with the response length (2 bytes for Chip ID) */
+		voidSendACK(2u);
+
+		/* Step 6: Transmit the Chip ID to the host */
+		HAL_UART_Transmit(&huart2, (uint8_t*)&Local_uint16CID , 2 , HAL_MAX_DELAY);
 	}
 	else
 	{
@@ -287,6 +315,7 @@ void BL_voidHandleGetCIDcmd(uint8_t* copy_puint8CmdPacket)
 		voidSendNACK();
 	}
 }
+
 
 
 void BL_voidHandleGetRDPStatusCmd(uint8_t* copy_puint8CmdPacket)

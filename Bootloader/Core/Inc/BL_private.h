@@ -4,7 +4,8 @@
 /*
  * CRC Status Codes
  * ----------------
- * These macros define the possible results of CRC verification.
+ * These macros define the possible results of CRC (Cyclic Redundancy Check) verification.
+ * CRC is used to ensure data integrity during communication.
  */
 #define CRC_SUCCESS    1u  /* CRC verification passed */
 #define CRC_FAIL       0u  /* CRC verification failed */
@@ -15,6 +16,25 @@
  * Defines the current version of the Bootloader.
  */
 #define BL_VERSION     1u  /* Bootloader version 1 */
+
+
+
+/*
+ * DBGMCU_IDCODE_REGISTER
+ * -----------------------
+ * Defines the memory-mapped register that holds the Device ID (Chip ID)
+ * of the microcontroller. It allows reading the unique identifier stored in the
+ * Debug MCU (DBGMCU) module.
+ *
+ * Usage:
+ * ------
+ * - The lower 12 bits of this register contain the **Device ID (Chip ID)**.
+ * - It helps in identifying the specific STM32 microcontroller model.
+ *
+ */
+#define DBGMCU_IDCODE_REGISTER         *((volatile uint32_t*)0xE0042000)
+
+
 
 
 
