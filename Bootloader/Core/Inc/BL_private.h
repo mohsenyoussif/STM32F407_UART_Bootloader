@@ -70,13 +70,33 @@
  */
 #define  RDP_USER_OPTION_WORD          *((volatile uint32_t*) 0x1FFFC000)
 
+
+
+/*
+ * NUMBER_OF_SECTORS
+ * -----------------
+ * Defines the total number of flash memory sectors available for erasing.
+ * This value is hardware-dependent and represents the maximum sector index.
+ */
+#define NUMBER_OF_SECTORS             12U
+
+/*
+ * MASS_ERASE
+ * ----------
+ * Defines a special command value used to indicate a full flash erase.
+ * When this value is passed instead of a specific sector number,
+ * the entire flash memory is erased.
+ */
+#define MASS_ERASE                    0XFF
+
+
 /*==========================================================================================================*/
 /*
  * Function Prototypes
  * -------------------
  * These static functions are used internally within the bootloader.
  */
-
+/*==========================================================================================================*/
 
 /*
  * uint8VerifyCRC
@@ -120,5 +140,14 @@ static void voidSendNACK(void);
  * (Flash or SRAM).
  */
 static uint8_t uint8_ValidateAddress(uint32_t Copy_uint32Address);
+
+
+/*
+ * uint8_tExecute_FlashErase
+ * -------------------------
+ * Performs a flash erase operation on a specified sector or the entire flash memory.
+ */
+static uint8_t uint8_tExecute_FlashErase(uint8_t Copy_uint8SectorNumber ,uint8_t Copy_uint8NumberofSectors);
+
 
 #endif /* INC_BL_PRIVATE_H_ */

@@ -179,6 +179,100 @@ static uint8_t uint8_ValidateAddress(uint32_t Copy_uint32Address)
 return Local_uint8AddressStatus ;
 }
 
+
+/*
+ * uint8_tExecute_FlashErase
+ * -------------------------
+ * This function erases a specific number of flash sectors or performs a mass erase.
+ * It validates the input parameters before executing the erase operation.
+ *
+ * Parameters:
+ * -----------
+ * @param Copy_uint8SectorNumber    : The starting sector number to erase.
+ *                                    - If `MASS_ERASE` is passed, the entire flash memory is erased.
+ * @param Copy_uint8NumberofSectors : The number of consecutive sectors to erase.
+ *
+ * Behavior:
+ * ---------
+ * 1. Checks if the requested number of sectors exceeds the total available sectors.
+ * 2. If an invalid sector number is provided (out of range), it returns `HAL_ERROR`.
+ * 3. If `MASS_ERASE` is requested, it sets the erase type to `FLASH_TYPEERASE_MASSERASE`.
+ * 4. Otherwise, it calculates the remaining sectors to ensure the erase does not exceed the flash range.
+ * 5. Sets up the erase configuration structure (`FLASH_EraseInitTypeDef`).
+ * 6. Unlocks the flash memory to allow erasing.
+ * 7. Calls `HAL_FLASHEx_Erase()` to perform the erase operation.
+ * 8. Locks the flash memory after the erase operation to prevent accidental modifications.
+ * 9. Returns the erase status (`HAL_OK` for success, `HAL_ERROR` for failure).
+ *
+ * Return:
+ * -------
+ * @return uint8_t : Flash erase operation status:
+ *         - `HAL_OK`    -> Erase successful.
+ *         - `HAL_ERROR` -> Invalid parameters or erase failure.
+ */
+static uint8_t uint8_tExecute_FlashErase(uint8_t Copy_uint8SectorNumber, uint8_t Copy_uint8NumberofSectors)
+{
+    HAL_StatusTypeDef Local_ErrorStatus = HAL_OK; // Variable to store function execution status
+
+    /* Validate input parameters */
+    if ((Copy_uint8NumberofSectors > NUMBER_OF_SECTORS) && (Copy_uint8SectorNumber != MASS_ERASE))
+    {
+        /* Error: Number of sectors requested exceeds available flash sectors */
+        Local_ErrorStatus = HAL_ERROR;
+    }
+    else if ((Copy_uint8SectorNumber > (NUMBER_OF_SECTORS - 1)) && (Copy_uint8SectorNumber != MASS_ERASE))
+    {
+        /* Error: Invalid starting sector number */
+        Local_ErrorStatus = HAL_ERROR;
+    }
+    else
+    {
+        /* Define structure to configure erase operation */
+        FLASH_EraseInitTypeDef Local_MyErase;
+        uint32_t Local_uint32SectorError; // Variable to store sector erase errors
+
+        /* Check if a mass erase is required */
+        if (Copy_uint8SectorNumber == MASS_ERASE)
+        {
+            /* Mass Erase: Erases all sectors in the flash memory */
+            Local_MyErase.TypeErase = FLASH_TYPEERASE_MASSERASE;
+        }
+        else
+        {
+            /* Sector Erase: Erase a specific number of sectors starting from Copy_uint8SectorNumber */
+            uint8_t Local_uint8RemainingSectors = NUMBER_OF_SECTORS - Copy_uint8SectorNumber;
+
+            /* Ensure the number of sectors does not exceed the available range */
+            if (Copy_uint8NumberofSectors > Local_uint8RemainingSectors)
+            {
+                Copy_uint8NumberofSectors = Local_uint8RemainingSectors;
+            }
+
+            /* Configure sector erase parameters */
+            Local_MyErase.TypeErase = FLASH_TYPEERASE_SECTORS;  // Select sector erase mode
+            Local_MyErase.NbSectors = Copy_uint8NumberofSectors; // Number of sectors to erase
+            Local_MyErase.Sector = Copy_uint8SectorNumber;       // Start sector for erase
+        }
+
+        /* Set additional erase parameters */
+        Local_MyErase.VoltageRange = FLASH_VOLTAGE_RANGE_3; // Voltage range (2.7V to 3.6V)
+        Local_MyErase.Banks = FLASH_BANK_1;                 // Select flash bank to erase
+
+        /* Unlock the flash memory for write/erase operations */
+        HAL_FLASH_Unlock();
+
+        /* Perform the erase operation */
+        Local_ErrorStatus = HAL_FLASHEx_Erase(&Local_MyErase, &Local_uint32SectorError);
+
+        /* Lock the flash memory to prevent accidental modifications */
+        HAL_FLASH_Lock();
+    }
+
+    /* Return the erase operation status */
+    return Local_ErrorStatus;
+}
+
+
 /**
  * BL_voidHandleGetVERCmd
  * @brief  Handles the "Get Version" command sent by the host.
@@ -488,7 +582,7 @@ void BL_voidHandleGoToAddressCmd(uint8_t* copy_puint8CmdPacket)
              * - Cast address to function pointer and execute.
              */
             void (*Local_pvFuncPtr)(void) = NULL;
-            Local_uint32Address++;  /* Increment to set T-bit for ARM Cortex-M Thumb mode */
+            Local_uint32Address|=0x1;  /* Set T-bit for ARM Cortex-M Thumb mode */
             Local_pvFuncPtr = (void*)Local_uint32Address;
             Local_pvFuncPtr();  /* Jump to the specified address */
 
@@ -509,7 +603,39 @@ void BL_voidHandleGoToAddressCmd(uint8_t* copy_puint8CmdPacket)
 }
 
 
-
+/*
+ * BL_voidHandleFlashEraseCmd
+ * --------------------------
+ * Handles the flash erase command received from the host.
+ * This function extracts and verifies the command data, performs the requested erase operation,
+ * and returns the erase status.
+ *
+ * Parameters:
+ * -----------
+ * @param copy_puint8CmdPacket : Pointer to the received command packet.
+ *                               The expected packet structure:
+ *                               - Byte [0]  : Command length (excluding itself).
+ *                               - Byte [1]  : Command identifier.
+ *                               - Byte [2]  : Sector number to erase (or `MASS_ERASE` for full erase).
+ *                               - Byte [3]  : Number of sectors to erase.
+ *                               - Last 4 bytes: CRC checksum for validation.
+ *
+ * Behavior:
+ * ---------
+ * 1. Extracts the command length and CRC from the received packet.
+ * 2. Performs CRC verification to ensure data integrity.
+ * 3. If CRC is valid:
+ *    - Sends an ACK to indicate a valid command.
+ *    - Turns on an LED (LD5) to indicate an erase operation in progress.
+ *    - Calls `uint8_tExecute_FlashErase()` to perform the erase.
+ *    - Turns off the LED (LD5) after completion.
+ *    - Sends the erase status back to the host.
+ * 4. If CRC verification fails, sends a NACK to the host.
+ *
+ * Return:
+ * -------
+ * - No return value (void), but the function sends feedback to the host via UART.
+ */
 void BL_voidHandleFlashEraseCmd(uint8_t* copy_puint8CmdPacket)
 {
 	uint8_t Local_uint8CRCStatus;
@@ -525,10 +651,24 @@ void BL_voidHandleFlashEraseCmd(uint8_t* copy_puint8CmdPacket)
 	/* Verify CRC of the received command */
 	Local_uint8CRCStatus = uint8VerifyCRC(copy_puint8CmdPacket, (Local_uint8CmdLen - 4), Local_uint32HostCRC);
 
-	if (Local_uint8CRCStatus == CRC_SUCCESS)
+	if(Local_uint8CRCStatus == CRC_SUCCESS)
 	{
-		/* Send ACK with the length of the response payload (1 byte for version) */
-		voidSendACK(1u);
+		uint8_t Local_uint8EraseStatus ;
+		/* Send ACK with the length of the response payload (1 byte for erase status) */
+		 voidSendACK(1u);
+
+		 /* Turn on LED (LD5) to indicate flash erase is in progress */
+		 HAL_GPIO_WritePin(LD5_GPIO_Port, LD5_Pin, GPIO_PIN_SET) ;
+
+		 /* Execute flash erase */
+		 Local_uint8EraseStatus =  uint8_tExecute_FlashErase(copy_puint8CmdPacket[2] ,copy_puint8CmdPacket[3]) ;
+
+		 /* Turn off LED (LD5) after erase completion */
+		 HAL_GPIO_WritePin(LD5_GPIO_Port, LD5_Pin, GPIO_PIN_RESET) ;
+
+		 /* Send the erase status to the host */
+		 HAL_UART_Transmit(&huart2, &Local_uint8EraseStatus, 1, HAL_MAX_DELAY) ;
+
 
 	}
 	else
@@ -553,7 +693,7 @@ void BL_voidHandleMemWriteCmd(uint8_t* copy_puint8CmdPacket)
 	/* Verify CRC of the received command */
 	Local_uint8CRCStatus = uint8VerifyCRC(copy_puint8CmdPacket, (Local_uint8CmdLen - 4), Local_uint32HostCRC);
 
-	if (Local_uint8CRCStatus == CRC_SUCCESS)
+	if(Local_uint8CRCStatus == CRC_SUCCESS)
 	{
 		/* Send ACK with the length of the response payload (1 byte for version) */
 		voidSendACK(1u);
@@ -581,7 +721,7 @@ void BL_voidHandleEnRWProtectCmd(uint8_t* copy_puint8CmdPacket)
 	/* Verify CRC of the received command */
 	Local_uint8CRCStatus = uint8VerifyCRC(copy_puint8CmdPacket, (Local_uint8CmdLen - 4), Local_uint32HostCRC);
 
-	if (Local_uint8CRCStatus == CRC_SUCCESS)
+	if(Local_uint8CRCStatus == CRC_SUCCESS)
 	{
 		/* Send ACK with the length of the response payload (1 byte for version) */
 		voidSendACK(1u);
@@ -609,7 +749,7 @@ void BL_voidHandleMemReadCmd(uint8_t* copy_puint8CmdPacket)
 	/* Verify CRC of the received command */
 	Local_uint8CRCStatus = uint8VerifyCRC(copy_puint8CmdPacket, (Local_uint8CmdLen - 4), Local_uint32HostCRC);
 
-	if (Local_uint8CRCStatus == CRC_SUCCESS)
+	if(Local_uint8CRCStatus == CRC_SUCCESS)
 	{
 		/* Send ACK with the length of the response payload (1 byte for version) */
 		voidSendACK(1u);
@@ -637,7 +777,7 @@ void BL_voidHandleReadSectorStatusCmd(uint8_t* copy_puint8CmdPacket)
 	/* Verify CRC of the received command */
 	Local_uint8CRCStatus = uint8VerifyCRC(copy_puint8CmdPacket, (Local_uint8CmdLen - 4), Local_uint32HostCRC);
 
-	if (Local_uint8CRCStatus == CRC_SUCCESS)
+	if(Local_uint8CRCStatus == CRC_SUCCESS)
 	{
 		/* Send ACK with the length of the response payload (1 byte for version) */
 		voidSendACK(1u);
@@ -665,7 +805,7 @@ void BL_voidHandleOTPReadCmd(uint8_t* copy_puint8CmdPacket)
 	/* Verify CRC of the received command */
 	Local_uint8CRCStatus = uint8VerifyCRC(copy_puint8CmdPacket, (Local_uint8CmdLen - 4), Local_uint32HostCRC);
 
-	if (Local_uint8CRCStatus == CRC_SUCCESS)
+	if(Local_uint8CRCStatus == CRC_SUCCESS)
 	{
 		/* Send ACK with the length of the response payload (1 byte for version) */
 		voidSendACK(1u);
@@ -693,7 +833,7 @@ void BL_voidHandleDisWRProtectCmd(uint8_t* copy_puint8CmdPacket)
 	/* Verify CRC of the received command */
 	Local_uint8CRCStatus = uint8VerifyCRC(copy_puint8CmdPacket, (Local_uint8CmdLen - 4), Local_uint32HostCRC);
 
-	if (Local_uint8CRCStatus == CRC_SUCCESS)
+	if(Local_uint8CRCStatus == CRC_SUCCESS)
 	{
 		/* Send ACK with the length of the response payload (1 byte for version) */
 		voidSendACK(1u);
