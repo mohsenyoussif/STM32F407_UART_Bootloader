@@ -131,7 +131,53 @@ static void voidSendNACK(void)
 	HAL_UART_Transmit(&huart2, &Local_uint8NAck, 1, HAL_MAX_DELAY);
 }
 
+/*
+ * uint8_ValidateAddress
+ * ---------------------
+ * This function checks whether a given memory address is within valid memory regions.
+ * The address is considered valid if it falls within the Flash memory or SRAM1.
+ *
+ * Parameters:
+ * -----------
+ * @param Copy_uint32Address : The memory address to be validated.
+ *
+ * Behavior:
+ * ---------
+ * 1. Initializes the address status as `NOT_VALID_ADDRESS`.
+ * 2. Checks if the address falls within the Flash memory range (`FLASH_BASE` to `FLASH_END`).
+ * 3. If not in Flash, checks if the address is within the SRAM1 range.
+ * 4. If the address matches either region, it is marked as `VALID_ADDRESS`, otherwise remains `NOT_VALID_ADDRESS`.
+ * 5. Returns the validation result.
+ *
+ * Return:
+ * -------
+ * @return uint8_t : Address validation status:
+ *         - `VALID_ADDRESS` if the address is within Flash or SRAM.
+ *         - `NOT_VALID_ADDRESS` otherwise.
+ */
+static uint8_t uint8_ValidateAddress(uint32_t Copy_uint32Address)
+{
 
+	     /* Initialize status as NOT valid */
+		uint8_t Local_uint8AddressStatus = NOT_VALID_ADDRESS;
+
+		/* Check if the address falls within Flash memory */
+	     if((Copy_uint32Address >= FLASH_BASE) && (Copy_uint32Address<= FLASH_END))
+	     {
+	    	 Local_uint8AddressStatus = VALID_ADDRESS ;
+	     }
+	     /* Check if the address falls within SRAM memory */
+	     else if((Copy_uint32Address >= SRAM1_BASE) && (Copy_uint32Address <= (SRAM1_BASE + (128*1024))))
+	     {
+	    	 Local_uint8AddressStatus = VALID_ADDRESS ;
+	     }
+	     else
+	     {
+	    	 Local_uint8AddressStatus = NOT_VALID_ADDRESS ;
+	     }
+
+return Local_uint8AddressStatus ;
+}
 
 /**
  * BL_voidHandleGetVERCmd
@@ -318,6 +364,26 @@ void BL_voidHandleGetCIDcmd(uint8_t* copy_puint8CmdPacket)
 
 
 
+/*
+ * BL_voidHandleGetRDPStatusCmd
+ * ----------------------------
+ * This function handles the "Get Read Protection (RDP) Status" command from the host.
+ * It verifies the CRC, extracts the RDP status from the option bytes, and sends it back.
+ *
+ * Parameters:
+ * -----------
+ * @param copy_puint8CmdPacket   : Pointer to the received command packet from the host.
+ *
+ * Behavior:
+ * ---------
+ * 1. Extracts the command length from the first byte of the packet.
+ * 2. Retrieves the CRC sent by the host from the last 4 bytes of the packet.
+ * 3. Calls `uint8VerifyCRC()` to check if the received data is valid.
+ * 4. If the CRC check passes:
+ *      - Reads the RDP status from the option bytes at `RDP_USER_OPTION_WORD`.
+ *      - Sends an ACK followed by the 1-byte RDP status.
+ * 5. If the CRC check fails, sends a NACK.
+ */
 void BL_voidHandleGetRDPStatusCmd(uint8_t* copy_puint8CmdPacket)
 {
 	uint8_t Local_uint8CRCStatus;
@@ -335,8 +401,15 @@ void BL_voidHandleGetRDPStatusCmd(uint8_t* copy_puint8CmdPacket)
 
 	if (Local_uint8CRCStatus == CRC_SUCCESS)
 	{
+
+		/* Extract RDP status from option bytes (stored in the upper byte) */
+		uint8_t Local_uint8RDPStatus = (uint8_t)((RDP_USER_OPTION_WORD >> 8) & 0xff);
+
 		/* Send ACK with the length of the response payload (1 byte for version) */
 		voidSendACK(1u);
+
+		/* Transmit the RDP status back to the host */
+		HAL_UART_Transmit(&huart2, (uint8_t*)&Local_uint8RDPStatus , 1 , HAL_MAX_DELAY);
 
 	}
 	else
@@ -346,33 +419,96 @@ void BL_voidHandleGetRDPStatusCmd(uint8_t* copy_puint8CmdPacket)
 	}
 }
 
+/*
+ * BL_voidHandleGoToAddressCmd
+ * ----------------------------
+ * Handles the "Go To Address" command from the Host, which requests jumping to a specific
+ * memory address and executing the code present there.
+ *
+ * **Parameters:**
+ * ---------------
+ * @param copy_puint8CmdPacket : Pointer to the received command packet containing:
+ *        - Command length
+ *        - Target address
+ *        - CRC for verification
+ *
+ * **Behavior:**
+ * ------------
+ * 1. Extracts the command length from the packet.
+ * 2. Extracts and verifies the CRC to ensure data integrity.
+ * 3. If the CRC is valid:
+ *    - Sends an ACK response to the Host.
+ *    - Extracts the target memory address from the command packet.
+ *    - Validates if the address falls within the permissible memory regions.
+ *    - If valid:
+ *        - Sends confirmation to the Host.
+ *        - Jumps to the specified address by updating the Program Counter (PC).
+ *    - If invalid:
+ *        - Sends a NACK response to indicate failure.
+ * 4. If the CRC check fails, a NACK is sent immediately.
+ */
 void BL_voidHandleGoToAddressCmd(uint8_t* copy_puint8CmdPacket)
 {
-	uint8_t Local_uint8CRCStatus;
-	uint8_t Local_uint8CmdLen; // this variable to extract command length
-	uint32_t Local_uint32HostCRC; // this variable to extract host CRC
+    uint8_t Local_uint8CRCStatus;
+    uint8_t Local_uint8CmdLen;       /* Variable to store command length */
+    uint32_t Local_uint32HostCRC;    /* Variable to store CRC received from Host */
 
-	/* Extract command length (first byte includes "Length to follow") */
-	Local_uint8CmdLen = copy_puint8CmdPacket[0] + 1;
+    /* Extract command length (first byte includes "Length to follow") */
+    Local_uint8CmdLen = copy_puint8CmdPacket[0] + 1;
 
-	/* Extract CRC from the last 4 bytes of the received packet */
-	Local_uint32HostCRC = *((uint32_t*)(copy_puint8CmdPacket + Local_uint8CmdLen - 4));
+    /* Extract CRC from the last 4 bytes of the received packet */
+    Local_uint32HostCRC = *((uint32_t*)(copy_puint8CmdPacket + Local_uint8CmdLen - 4));
 
-	/* Verify CRC of the received command */
-	Local_uint8CRCStatus = uint8VerifyCRC(copy_puint8CmdPacket, (Local_uint8CmdLen - 4), Local_uint32HostCRC);
+    /* Verify CRC of the received command */
+    Local_uint8CRCStatus = uint8VerifyCRC(copy_puint8CmdPacket, (Local_uint8CmdLen - 4), Local_uint32HostCRC);
 
-	if (Local_uint8CRCStatus == CRC_SUCCESS)
-	{
-		/* Send ACK with the length of the response payload (1 byte for version) */
-		voidSendACK(1u);
+    if (Local_uint8CRCStatus == CRC_SUCCESS)
+    {
+        uint32_t Local_uint32Address;
+        uint8_t Local_uint8AddressValidStatus;
 
-	}
-	else
-	{
-		/* Send NACK if CRC verification fails */
-		voidSendNACK();
-	}
+        /* Send ACK with the length of the response payload (1 byte for address validation result) */
+        voidSendACK(1u);
+
+        /* Extract the target address from the command packet */
+        Local_uint32Address = *((uint32_t*)&copy_puint8CmdPacket[2]);
+
+        /* Validate if the extracted address falls within Flash or SRAM */
+        Local_uint8AddressValidStatus = uint8_ValidateAddress(Local_uint32Address);
+
+        if (Local_uint8AddressValidStatus == VALID_ADDRESS)
+        {
+            /* Notify the Host that the address is valid */
+            HAL_UART_Transmit(&huart2, &Local_uint8AddressValidStatus, 1, HAL_MAX_DELAY);
+
+            /*
+             * Jump to the specified address:
+             * - Define a pointer to function.
+             * - Increment address by 1 to ensure Thumb mode (T-bit = 1).
+             * - Cast address to function pointer and execute.
+             */
+            void (*Local_pvFuncPtr)(void) = NULL;
+            Local_uint32Address++;  /* Increment to set T-bit for ARM Cortex-M Thumb mode */
+            Local_pvFuncPtr = (void*)Local_uint32Address;
+            Local_pvFuncPtr();  /* Jump to the specified address */
+
+            /* Same to __asm volatile("MSR PC ,%0"::"r"(Local_uint32Address+1));
+             * */
+        }
+        else
+        {
+        	/* Notify the Host that the address is Invalid */
+          HAL_UART_Transmit(&huart2, &Local_uint8AddressValidStatus, 1, HAL_MAX_DELAY);
+        }
+    }
+    else
+    {
+        /* Send NACK if CRC verification fails */
+        voidSendNACK();
+    }
 }
+
+
 
 void BL_voidHandleFlashEraseCmd(uint8_t* copy_puint8CmdPacket)
 {

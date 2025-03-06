@@ -18,6 +18,17 @@
 #define BL_VERSION     1u  /* Bootloader version 1 */
 
 
+/*
+ * Address Validation Status
+ * -------------------------
+ * These macros are used to indicate whether a given memory address is valid.
+ *
+ * - `VALID_ADDRESS`: Indicates that the address falls within a permissible memory region.
+ * - `NOT_VALID_ADDRESS`: Indicates that the address is outside the allowed memory regions.
+ */
+#define VALID_ADDRESS                1u  /* Address is valid */
+#define NOT_VALID_ADDRESS            0u  /* Address is not valid */
+
 
 /*
  * DBGMCU_IDCODE_REGISTER
@@ -34,15 +45,38 @@
  */
 #define DBGMCU_IDCODE_REGISTER         *((volatile uint32_t*)0xE0042000)
 
+/*
+ * RDP_USER_OPTION_WORD
+ * ---------------------
+ * This macro provides access to the Read Protection (RDP) and User Option Bytes stored
+ * in the system memory at address 0x1FFFC000. The value at this address determines
+ * the read protection level of the microcontroller.
+ * Usage:
+ * ------
+ * - This macro can be used to read the current protection level or user configuration settings.
+ * - It is often referenced in security-related operations, such as checking if the firmware is protected.
+ *
+ * Example:
+ * --------
+ * ```c
+ * uint32_t rdpStatus = RDP_USER_OPTION_WORD;
+ * if ((rdpStatus & 0xFF) == 0xAA) {
+ *     // RDP Level 0 (No protection)
+ * } else if ((rdpStatus & 0xFF) == 0xBB) {
+ *     // RDP Level 1 (Read protection enabled)
+ * } else {
+ *     // RDP Level 2 (Permanent protection)
+ * }
+ */
+#define  RDP_USER_OPTION_WORD          *((volatile uint32_t*) 0x1FFFC000)
 
-
-
-
+/*==========================================================================================================*/
 /*
  * Function Prototypes
  * -------------------
  * These static functions are used internally within the bootloader.
  */
+
 
 /*
  * uint8VerifyCRC
@@ -59,6 +93,7 @@
  */
 static uint8_t uint8VerifyCRC(uint8_t* copy_puint8dataArr, uint8_t copy_uint8Length, uint32_t copy_uint32HostCRC);
 
+
 /*
  * voidSendACK
  * -----------
@@ -67,6 +102,7 @@ static uint8_t uint8VerifyCRC(uint8_t* copy_puint8dataArr, uint8_t copy_uint8Len
  * @param copy_uint8ReplyLength : The length of the response data following the ACK.
  */
 static void voidSendACK(uint8_t copy_uint8ReplyeLngth);
+
 
 /*
  * voidSendNACK
@@ -77,6 +113,12 @@ static void voidSendACK(uint8_t copy_uint8ReplyeLngth);
 static void voidSendNACK(void);
 
 
-
+/*
+ * uint8_ValidateAddress
+ * ----------------------
+ * Validates whether a given memory address falls within the permissible memory regions
+ * (Flash or SRAM).
+ */
+static uint8_t uint8_ValidateAddress(uint32_t Copy_uint32Address);
 
 #endif /* INC_BL_PRIVATE_H_ */

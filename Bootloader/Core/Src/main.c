@@ -96,10 +96,10 @@ char HelloBootloader[]= "Hello From Bootloader\r\n" ;
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
    /*Read the button*/
- if( HAL_GPIO_ReadPin(B1_GPIO_Port, B1_Pin)== GPIO_PIN_RESET)
+ if( HAL_GPIO_ReadPin(B1_GPIO_Port, B1_Pin)== GPIO_PIN_SET)
  {
 	 Bootloader_UartReadData();
- }else if(HAL_GPIO_ReadPin(B1_GPIO_Port, B1_Pin)== GPIO_PIN_SET)
+ }else if(HAL_GPIO_ReadPin(B1_GPIO_Port, B1_Pin)== GPIO_PIN_RESET)
  {
 	 Bootloader_JumpToUserApp();
  }
