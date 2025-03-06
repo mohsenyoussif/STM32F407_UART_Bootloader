@@ -23,10 +23,10 @@
 #define BL_FLASH_ERASE               0x56  /* Erase specific sectors/pages in flash memory */
 #define BL_MEM_WRITE                 0x57  /* Write data to flash memory */
 #define BL_EN_RW_PROTECT             0x58  /* Enable read/write protection for memory sectors */
-#define BL_MEM_READ                  0x5A  /* Read data from memory */
-#define BL_READ_SECTOR_STATUS        0x5B  /* Get the protection status of memory sectors */
-#define BL_OTP_READ                  0x5C  /* Read One-Time Programmable (OTP) memory */
-#define BL_DIS_WR_PROTECT            0x5D  /* Disable write protection for memory sectors */
+#define BL_MEM_READ                  0x59  /* Read data from memory */
+#define BL_READ_SECTOR_STATUS        0x5A  /* Get the protection status of memory sectors */
+#define BL_OTP_READ                  0x5B  /* Read One-Time Programmable (OTP) memory */
+#define BL_DIS_WR_PROTECT            0x5C  /* Disable write protection for memory sectors */
 
 
 /*

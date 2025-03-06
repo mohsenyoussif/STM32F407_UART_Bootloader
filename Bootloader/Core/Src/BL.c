@@ -47,30 +47,30 @@ static uint8_t uint8VerifyCRC(uint8_t* copy_puint8dataArr,uint8_t copy_uint8Leng
 	uint8_t Local_uint8Iterator , Local_uint8CRCStatus ;
 	uint32_t Local_uint8AccCRC   , Local_uint32Temp;
 
-	 /*
-	     * Step 1: Compute the CRC for the given data.
-	     * The function iterates through each byte of the data array, accumulating the CRC value.
-	     */
+	/*
+	 * Step 1: Compute the CRC for the given data.
+	 * The function iterates through each byte of the data array, accumulating the CRC value.
+	 */
 	for(Local_uint8Iterator = 0 ; Local_uint8Iterator < copy_uint8Length; Local_uint8Iterator++)
 	{
 		/* Load the current byte from the data array into a temporary variable */
 		Local_uint32Temp = copy_puint8dataArr[Local_uint8Iterator];
 
-		 /* Accumulate the CRC for the current byte */
+		/* Accumulate the CRC for the current byte */
 		Local_uint8AccCRC = HAL_CRC_Accumulate(&hcrc, &Local_uint32Temp, 1);
 	}
 
 	/*
-	     * Step 2: Reset the CRC calculation unit.
-	     * This ensures that every time this function is called, it starts calculation from the beginning.
+	 * Step 2: Reset the CRC calculation unit.
+	 * This ensures that every time this function is called, it starts calculation from the beginning.
 	 */
 	__HAL_CRC_RESET_HANDLE_STATE(&hcrc);
 
 
 	/*
-	     * Step 3: Compare the computed CRC with the expected CRC from the Host.
-	     * If they match, the CRC check is successful; otherwise, it fails.
-	*/
+	 * Step 3: Compare the computed CRC with the expected CRC from the Host.
+	 * If they match, the CRC check is successful; otherwise, it fails.
+	 */
 	if(Local_uint8AccCRC == copy_uint32HostCRC)
 	{
 		Local_uint8CRCStatus = CRC_SUCCESS ;   /* CRC verification passed */
@@ -103,11 +103,11 @@ static uint8_t uint8VerifyCRC(uint8_t* copy_puint8dataArr,uint8_t copy_uint8Leng
 
 static void voidSendACK(uint8_t copy_uint8ReplyeLngth)
 {
-    /* Buffer to hold the ACK response and the length of the following response */
-    uint8_t Local_uint8AckBuffer[2] = {BL_ACK, copy_uint8ReplyeLngth};
+	/* Buffer to hold the ACK response and the length of the following response */
+	uint8_t Local_uint8AckBuffer[2] = {BL_ACK, copy_uint8ReplyeLngth};
 
-    /* Send ACK response via UART */
-    HAL_UART_Transmit(&huart2, Local_uint8AckBuffer, 2, HAL_MAX_DELAY);
+	/* Send ACK response via UART */
+	HAL_UART_Transmit(&huart2, Local_uint8AckBuffer, 2, HAL_MAX_DELAY);
 }
 
 /*
@@ -124,11 +124,11 @@ static void voidSendACK(uint8_t copy_uint8ReplyeLngth)
 
 static void voidSendNACK(void)
 {
-    /* Buffer holding the NACK response */
-    uint8_t Local_uint8NAck = BL_NACK;
+	/* Buffer holding the NACK response */
+	uint8_t Local_uint8NAck = BL_NACK;
 
-    /* Send NACK response via UART */
-    HAL_UART_Transmit(&huart2, &Local_uint8NAck, 1, HAL_MAX_DELAY);
+	/* Send NACK response via UART */
+	HAL_UART_Transmit(&huart2, &Local_uint8NAck, 1, HAL_MAX_DELAY);
 }
 
 
@@ -159,88 +159,384 @@ static void voidSendNACK(void)
  */
 void BL_voidHandleGetVERCmd(uint8_t* copy_puint8CmdPacket)
 {
-    uint8_t Local_uint8BLVersion, Local_uint8CRCStatus;
-    uint8_t Local_uint8CmdLen; // this variabke to extract command length
-    uint32_t Local_uint32HostCRC; // this variable to extract host CRC
+	uint8_t Local_uint8BLVersion, Local_uint8CRCStatus;
+	uint8_t Local_uint8CmdLen; // this variable to extract command length
+	uint32_t Local_uint32HostCRC; // this variable to extract host CRC
 
-    /* Extract command length (first byte includes "Length to follow") */
-    Local_uint8CmdLen = copy_puint8CmdPacket[0] + 1;
+	/* Extract command length (first byte includes "Length to follow") */
+	Local_uint8CmdLen = copy_puint8CmdPacket[0] + 1;
 
-    /* Extract CRC from the last 4 bytes of the received packet */
-    Local_uint32HostCRC = *((uint32_t*)(copy_puint8CmdPacket + Local_uint8CmdLen - 4));
+	/* Extract CRC from the last 4 bytes of the received packet */
+	Local_uint32HostCRC = *((uint32_t*)(copy_puint8CmdPacket + Local_uint8CmdLen - 4));
 
-    /* Verify CRC of the received command */
-    Local_uint8CRCStatus = uint8VerifyCRC(copy_puint8CmdPacket, (Local_uint8CmdLen - 4), Local_uint32HostCRC);
+	/* Verify CRC of the received command */
+	Local_uint8CRCStatus = uint8VerifyCRC(copy_puint8CmdPacket, (Local_uint8CmdLen - 4), Local_uint32HostCRC);
 
-    if (Local_uint8CRCStatus == CRC_SUCCESS)
-    {
-        /* Send ACK with the length of the response payload (1 byte for version) */
-        voidSendACK(1u);
+	if (Local_uint8CRCStatus == CRC_SUCCESS)
+	{
+		/* Send ACK with the length of the response payload (1 byte for version) */
+		voidSendACK(1u);
 
-        /* Send the bootloader version */
-        Local_uint8BLVersion = BL_VERSION;
-        HAL_UART_Transmit(&huart2, &Local_uint8BLVersion, 1, HAL_MAX_DELAY);
-    }
-    else
-    {
-        /* Send NACK if CRC verification fails */
-        voidSendNACK();
-    }
+		/* Send the bootloader version */
+		Local_uint8BLVersion = BL_VERSION;
+		HAL_UART_Transmit(&huart2, &Local_uint8BLVersion, 1, HAL_MAX_DELAY);
+	}
+	else
+	{
+		/* Send NACK if CRC verification fails */
+		voidSendNACK();
+	}
 }
 
 
+/*
+ * BL_voidHandleGetHelpCmd
+ * -----------------------
+ * This function handles the "Get Help" command in the bootloader.
+ * It verifies the received command packet using CRC and, if valid,
+ * sends back a list of supported bootloader commands to the host.
+ *
+ * Parameters:
+ * -----------
+ * @param copy_puint8CmdPacket : Pointer to the received command packet.
+ *
+ * Behavior:
+ * ---------
+ * 1. Extracts the command length from the first byte of the packet.
+ * 2. Retrieves the CRC value from the last 4 bytes of the packet.
+ * 3. Verifies the integrity of the received packet using `uint8VerifyCRC()`.
+ * 4. If CRC verification passes:
+ *      - Prepares an array of supported bootloader commands.
+ *      - Sends an ACK with the size of the supported commands list.
+ *      - Transmits the list of supported commands via UART.
+ * 5. If CRC verification fails, sends a NACK to the host.
+ */
 void BL_voidHandleGetHelpCmd(uint8_t* copy_puint8CmdPacket)
 {
+	uint8_t Local_uint8CRCStatus;
+	uint8_t Local_uint8CmdLen; // this variable to extract command length
+	uint32_t Local_uint32HostCRC; // this variable to extract host CRC
 
+	/* Extract command length (first byte includes "Length to follow") */
+	Local_uint8CmdLen = copy_puint8CmdPacket[0] + 1;
+
+	/* Extract CRC from the last 4 bytes of the received packet */
+	Local_uint32HostCRC = *((uint32_t*)(copy_puint8CmdPacket + Local_uint8CmdLen - 4));
+
+	/* Verify CRC of the received command */
+	Local_uint8CRCStatus = uint8VerifyCRC(copy_puint8CmdPacket, (Local_uint8CmdLen - 4), Local_uint32HostCRC);
+
+	if (Local_uint8CRCStatus == CRC_SUCCESS)
+	{
+
+		/* Define an array containing all supported bootloader commands */
+		uint8_t Local_uint8BLSupportedCommands []=
+		{
+			                	BL_GET_VESRION            ,
+			                 	BL_GET_HELP               ,
+								BL_GET_CID                ,
+								BL_GET_RDP_STATUS         ,
+								BL_GO_TO_ADDR             ,
+								BL_FLASH_ERASE            ,
+								BL_MEM_WRITE              ,
+								BL_EN_RW_PROTECT          ,
+								BL_MEM_READ               ,
+								BL_READ_SECTOR_STATUS     ,
+								BL_OTP_READ               ,
+								BL_DIS_WR_PROTECT
+		};
+
+		/* Send an ACK with the size of the supported commands list */
+		voidSendACK(sizeof(Local_uint8BLSupportedCommands));
+
+		/* Transmit the list of supported commands to the host over UART */
+		HAL_UART_Transmit(&huart2, Local_uint8BLSupportedCommands, sizeof(Local_uint8BLSupportedCommands), HAL_MAX_DELAY);
+
+	}
+	else
+	{
+		/* Send NACK if CRC verification fails */
+		voidSendNACK();
+	}
 }
 
 void BL_voidHandleGetCIDcmd(uint8_t* copy_puint8CmdPacket)
 {
+	uint8_t Local_uint8CRCStatus;
+	uint8_t Local_uint8CmdLen; // this variable to extract command length
+	uint32_t Local_uint32HostCRC; // this variable to extract host CRC
 
+	/* Extract command length (first byte includes "Length to follow") */
+	Local_uint8CmdLen = copy_puint8CmdPacket[0] + 1;
+
+	/* Extract CRC from the last 4 bytes of the received packet */
+	Local_uint32HostCRC = *((uint32_t*)(copy_puint8CmdPacket + Local_uint8CmdLen - 4));
+
+	/* Verify CRC of the received command */
+	Local_uint8CRCStatus = uint8VerifyCRC(copy_puint8CmdPacket, (Local_uint8CmdLen - 4), Local_uint32HostCRC);
+
+	if (Local_uint8CRCStatus == CRC_SUCCESS)
+	{
+		/* Send ACK with the length of the response payload (1 byte for version) */
+		voidSendACK(1u);
+
+	}
+	else
+	{
+		/* Send NACK if CRC verification fails */
+		voidSendNACK();
+	}
 }
 
 
 void BL_voidHandleGetRDPStatusCmd(uint8_t* copy_puint8CmdPacket)
 {
+	uint8_t Local_uint8CRCStatus;
+	uint8_t Local_uint8CmdLen; // this variable to extract command length
+	uint32_t Local_uint32HostCRC; // this variable to extract host CRC
 
+	/* Extract command length (first byte includes "Length to follow") */
+	Local_uint8CmdLen = copy_puint8CmdPacket[0] + 1;
+
+	/* Extract CRC from the last 4 bytes of the received packet */
+	Local_uint32HostCRC = *((uint32_t*)(copy_puint8CmdPacket + Local_uint8CmdLen - 4));
+
+	/* Verify CRC of the received command */
+	Local_uint8CRCStatus = uint8VerifyCRC(copy_puint8CmdPacket, (Local_uint8CmdLen - 4), Local_uint32HostCRC);
+
+	if (Local_uint8CRCStatus == CRC_SUCCESS)
+	{
+		/* Send ACK with the length of the response payload (1 byte for version) */
+		voidSendACK(1u);
+
+	}
+	else
+	{
+		/* Send NACK if CRC verification fails */
+		voidSendNACK();
+	}
 }
 
 void BL_voidHandleGoToAddressCmd(uint8_t* copy_puint8CmdPacket)
 {
+	uint8_t Local_uint8CRCStatus;
+	uint8_t Local_uint8CmdLen; // this variable to extract command length
+	uint32_t Local_uint32HostCRC; // this variable to extract host CRC
 
+	/* Extract command length (first byte includes "Length to follow") */
+	Local_uint8CmdLen = copy_puint8CmdPacket[0] + 1;
+
+	/* Extract CRC from the last 4 bytes of the received packet */
+	Local_uint32HostCRC = *((uint32_t*)(copy_puint8CmdPacket + Local_uint8CmdLen - 4));
+
+	/* Verify CRC of the received command */
+	Local_uint8CRCStatus = uint8VerifyCRC(copy_puint8CmdPacket, (Local_uint8CmdLen - 4), Local_uint32HostCRC);
+
+	if (Local_uint8CRCStatus == CRC_SUCCESS)
+	{
+		/* Send ACK with the length of the response payload (1 byte for version) */
+		voidSendACK(1u);
+
+	}
+	else
+	{
+		/* Send NACK if CRC verification fails */
+		voidSendNACK();
+	}
 }
 
 void BL_voidHandleFlashEraseCmd(uint8_t* copy_puint8CmdPacket)
 {
+	uint8_t Local_uint8CRCStatus;
+	uint8_t Local_uint8CmdLen; // this variable to extract command length
+	uint32_t Local_uint32HostCRC; // this variable to extract host CRC
 
+	/* Extract command length (first byte includes "Length to follow") */
+	Local_uint8CmdLen = copy_puint8CmdPacket[0] + 1;
+
+	/* Extract CRC from the last 4 bytes of the received packet */
+	Local_uint32HostCRC = *((uint32_t*)(copy_puint8CmdPacket + Local_uint8CmdLen - 4));
+
+	/* Verify CRC of the received command */
+	Local_uint8CRCStatus = uint8VerifyCRC(copy_puint8CmdPacket, (Local_uint8CmdLen - 4), Local_uint32HostCRC);
+
+	if (Local_uint8CRCStatus == CRC_SUCCESS)
+	{
+		/* Send ACK with the length of the response payload (1 byte for version) */
+		voidSendACK(1u);
+
+	}
+	else
+	{
+		/* Send NACK if CRC verification fails */
+		voidSendNACK();
+	}
 }
 
 void BL_voidHandleMemWriteCmd(uint8_t* copy_puint8CmdPacket)
 {
+	uint8_t Local_uint8CRCStatus;
+	uint8_t Local_uint8CmdLen; // this variable to extract command length
+	uint32_t Local_uint32HostCRC; // this variable to extract host CRC
 
+	/* Extract command length (first byte includes "Length to follow") */
+	Local_uint8CmdLen = copy_puint8CmdPacket[0] + 1;
+
+	/* Extract CRC from the last 4 bytes of the received packet */
+	Local_uint32HostCRC = *((uint32_t*)(copy_puint8CmdPacket + Local_uint8CmdLen - 4));
+
+	/* Verify CRC of the received command */
+	Local_uint8CRCStatus = uint8VerifyCRC(copy_puint8CmdPacket, (Local_uint8CmdLen - 4), Local_uint32HostCRC);
+
+	if (Local_uint8CRCStatus == CRC_SUCCESS)
+	{
+		/* Send ACK with the length of the response payload (1 byte for version) */
+		voidSendACK(1u);
+
+	}
+	else
+	{
+		/* Send NACK if CRC verification fails */
+		voidSendNACK();
+	}
 }
 
 void BL_voidHandleEnRWProtectCmd(uint8_t* copy_puint8CmdPacket)
 {
+	uint8_t Local_uint8CRCStatus;
+	uint8_t Local_uint8CmdLen; // this variable to extract command length
+	uint32_t Local_uint32HostCRC; // this variable to extract host CRC
 
+	/* Extract command length (first byte includes "Length to follow") */
+	Local_uint8CmdLen = copy_puint8CmdPacket[0] + 1;
+
+	/* Extract CRC from the last 4 bytes of the received packet */
+	Local_uint32HostCRC = *((uint32_t*)(copy_puint8CmdPacket + Local_uint8CmdLen - 4));
+
+	/* Verify CRC of the received command */
+	Local_uint8CRCStatus = uint8VerifyCRC(copy_puint8CmdPacket, (Local_uint8CmdLen - 4), Local_uint32HostCRC);
+
+	if (Local_uint8CRCStatus == CRC_SUCCESS)
+	{
+		/* Send ACK with the length of the response payload (1 byte for version) */
+		voidSendACK(1u);
+
+	}
+	else
+	{
+		/* Send NACK if CRC verification fails */
+		voidSendNACK();
+	}
 }
 
 void BL_voidHandleMemReadCmd(uint8_t* copy_puint8CmdPacket)
 {
+	uint8_t Local_uint8CRCStatus;
+	uint8_t Local_uint8CmdLen; // this variable to extract command length
+	uint32_t Local_uint32HostCRC; // this variable to extract host CRC
 
+	/* Extract command length (first byte includes "Length to follow") */
+	Local_uint8CmdLen = copy_puint8CmdPacket[0] + 1;
+
+	/* Extract CRC from the last 4 bytes of the received packet */
+	Local_uint32HostCRC = *((uint32_t*)(copy_puint8CmdPacket + Local_uint8CmdLen - 4));
+
+	/* Verify CRC of the received command */
+	Local_uint8CRCStatus = uint8VerifyCRC(copy_puint8CmdPacket, (Local_uint8CmdLen - 4), Local_uint32HostCRC);
+
+	if (Local_uint8CRCStatus == CRC_SUCCESS)
+	{
+		/* Send ACK with the length of the response payload (1 byte for version) */
+		voidSendACK(1u);
+
+	}
+	else
+	{
+		/* Send NACK if CRC verification fails */
+		voidSendNACK();
+	}
 }
 
 void BL_voidHandleReadSectorStatusCmd(uint8_t* copy_puint8CmdPacket)
 {
+	uint8_t Local_uint8CRCStatus;
+	uint8_t Local_uint8CmdLen; // this variable to extract command length
+	uint32_t Local_uint32HostCRC; // this variable to extract host CRC
 
+	/* Extract command length (first byte includes "Length to follow") */
+	Local_uint8CmdLen = copy_puint8CmdPacket[0] + 1;
+
+	/* Extract CRC from the last 4 bytes of the received packet */
+	Local_uint32HostCRC = *((uint32_t*)(copy_puint8CmdPacket + Local_uint8CmdLen - 4));
+
+	/* Verify CRC of the received command */
+	Local_uint8CRCStatus = uint8VerifyCRC(copy_puint8CmdPacket, (Local_uint8CmdLen - 4), Local_uint32HostCRC);
+
+	if (Local_uint8CRCStatus == CRC_SUCCESS)
+	{
+		/* Send ACK with the length of the response payload (1 byte for version) */
+		voidSendACK(1u);
+
+	}
+	else
+	{
+		/* Send NACK if CRC verification fails */
+		voidSendNACK();
+	}
 }
 
 void BL_voidHandleOTPReadCmd(uint8_t* copy_puint8CmdPacket)
 {
+	uint8_t Local_uint8CRCStatus;
+	uint8_t Local_uint8CmdLen; // this variable to extract command length
+	uint32_t Local_uint32HostCRC; // this variable to extract host CRC
 
+	/* Extract command length (first byte includes "Length to follow") */
+	Local_uint8CmdLen = copy_puint8CmdPacket[0] + 1;
+
+	/* Extract CRC from the last 4 bytes of the received packet */
+	Local_uint32HostCRC = *((uint32_t*)(copy_puint8CmdPacket + Local_uint8CmdLen - 4));
+
+	/* Verify CRC of the received command */
+	Local_uint8CRCStatus = uint8VerifyCRC(copy_puint8CmdPacket, (Local_uint8CmdLen - 4), Local_uint32HostCRC);
+
+	if (Local_uint8CRCStatus == CRC_SUCCESS)
+	{
+		/* Send ACK with the length of the response payload (1 byte for version) */
+		voidSendACK(1u);
+
+	}
+	else
+	{
+		/* Send NACK if CRC verification fails */
+		voidSendNACK();
+	}
 }
 
 void BL_voidHandleDisWRProtectCmd(uint8_t* copy_puint8CmdPacket)
 {
+	uint8_t Local_uint8CRCStatus;
+	uint8_t Local_uint8CmdLen; // this variable to extract command length
+	uint32_t Local_uint32HostCRC; // this variable to extract host CRC
 
+	/* Extract command length (first byte includes "Length to follow") */
+	Local_uint8CmdLen = copy_puint8CmdPacket[0] + 1;
+
+	/* Extract CRC from the last 4 bytes of the received packet */
+	Local_uint32HostCRC = *((uint32_t*)(copy_puint8CmdPacket + Local_uint8CmdLen - 4));
+
+	/* Verify CRC of the received command */
+	Local_uint8CRCStatus = uint8VerifyCRC(copy_puint8CmdPacket, (Local_uint8CmdLen - 4), Local_uint32HostCRC);
+
+	if (Local_uint8CRCStatus == CRC_SUCCESS)
+	{
+		/* Send ACK with the length of the response payload (1 byte for version) */
+		voidSendACK(1u);
+
+	}
+	else
+	{
+		/* Send NACK if CRC verification fails */
+		voidSendNACK();
+	}
 }
