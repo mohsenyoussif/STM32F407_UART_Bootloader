@@ -90,6 +90,12 @@
 #define MASS_ERASE                    0XFF
 
 
+#define WRITING_SUCCESS               1u
+#define WRITING_ERROR                 0u
+
+
+
+
 /*==========================================================================================================*/
 /*
  * Function Prototypes
@@ -148,6 +154,8 @@ static uint8_t uint8_ValidateAddress(uint32_t Copy_uint32Address);
  * Performs a flash erase operation on a specified sector or the entire flash memory.
  */
 static uint8_t uint8_tExecute_FlashErase(uint8_t Copy_uint8SectorNumber ,uint8_t Copy_uint8NumberofSectors);
+
+static uint8_t uint8_ExecuteMemoryWrite(uint8_t* Copy_Puint8Buffer ,uint32_t Copy_uint32Address ,uint8_t Copy_uint8Length);
 
 
 #endif /* INC_BL_PRIVATE_H_ */

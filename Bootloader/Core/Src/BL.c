@@ -273,6 +273,78 @@ static uint8_t uint8_tExecute_FlashErase(uint8_t Copy_uint8SectorNumber, uint8_t
 }
 
 
+/*
+ * uint8_ExecuteMemoryWrite
+ * ------------------------
+ * Supports writing data to either Flash memory or SRAM.
+ *
+ * Parameters:
+ * -----------
+ * @param Copy_Puint8Buffer   : Pointer to the buffer containing data to be written.
+ * @param Copy_uint32Address  : Target memory address where data should be written.
+ * @param Copy_uint8Length    : Number of bytes to write.
+ *
+ * Behavior:
+ * ---------
+ * 1. If the target address is within Flash memory:
+ *    - Unlocks Flash for writing.
+ *    - Writes data byte-by-byte using Flash programming.
+ *    - Locks Flash after writing to prevent accidental modifications.
+ *
+ * 2. If the target address is within SRAM:
+ *    - Writes data byte-by-byte directly to SRAM.
+ *
+ * Return:
+ * -------
+ * @return uint8_t : Error status of the write operation.
+ *         - `HAL_OK`   if the operation is successful.
+ *         - `HAL_ERROR` otherwise.
+ */
+static uint8_t uint8_ExecuteMemoryWrite(uint8_t* Copy_Puint8Buffer ,uint32_t Copy_uint32Address ,uint8_t Copy_uint8Length)
+{
+   uint8_t Local_uint8ErrorStatus = HAL_ERROR;
+
+   /* Check if the target address is within Flash memory */
+   if((Copy_uint32Address >= FLASH_BASE) && (Copy_uint32Address <= FLASH_END))
+   {
+       /* We will write byte-by-byte (Byte Programming), so a loop is used */
+       uint8_t Local_uint8Iterator;
+
+       /* Unlock the flash memory for write operations */
+       HAL_FLASH_Unlock();
+
+       /* Write each byte from the buffer to the target Flash address */
+       for(Local_uint8Iterator = 0; Local_uint8Iterator < Copy_uint8Length; Local_uint8Iterator++)
+       {
+           Local_uint8ErrorStatus = HAL_FLASH_Program(FLASH_TYPEPROGRAM_BYTE, Copy_uint32Address + Local_uint8Iterator,(uint64_t)Copy_Puint8Buffer[Local_uint8Iterator]);
+
+       }
+
+       /* Lock the flash memory to prevent accidental modifications */
+       HAL_FLASH_Lock();
+   }
+
+   /* If the target address is within SRAM */
+   else
+   {
+       /* We will write byte-by-byte (Byte Programming), so a loop is used */
+       uint8_t Local_uint8Iterator;
+       uint8_t* Local_Puint8Destination = (uint8_t*)Copy_uint32Address; /* Cast the address to a byte pointer */
+
+       /* Copy data from the buffer to the target SRAM address */
+       for(Local_uint8Iterator = 0; Local_uint8Iterator < Copy_uint8Length; Local_uint8Iterator++)
+       {
+           Local_Puint8Destination[Local_uint8Iterator] = Copy_Puint8Buffer[Local_uint8Iterator];
+       }
+   }
+
+   /* Return the error status (HAL_OK if successful, HAL_ERROR otherwise) */
+   return Local_uint8ErrorStatus;
+}
+
+
+
+
 /**
  * BL_voidHandleGetVERCmd
  * @brief  Handles the "Get Version" command sent by the host.
@@ -561,8 +633,8 @@ void BL_voidHandleGoToAddressCmd(uint8_t* copy_puint8CmdPacket)
         uint32_t Local_uint32Address;
         uint8_t Local_uint8AddressValidStatus;
 
-        /* Send ACK with the length of the response payload (1 byte for address validation result) */
-        voidSendACK(1u);
+        /* Send ACK with the length of the response payload (4 byte for address validation result) */
+        voidSendACK(4u);
 
         /* Extract the target address from the command packet */
         Local_uint32Address = *((uint32_t*)&copy_puint8CmdPacket[2]);
@@ -695,8 +767,29 @@ void BL_voidHandleMemWriteCmd(uint8_t* copy_puint8CmdPacket)
 
 	if(Local_uint8CRCStatus == CRC_SUCCESS)
 	{
-		/* Send ACK with the length of the response payload (1 byte for version) */
-		voidSendACK(1u);
+         uint8_t Local_uint8WritingStatus ;
+
+		/*Extract the base memory address from command */
+		uint32_t Local_uint32Address = *((uint32_t*)&copy_puint8CmdPacket[2]);
+
+		 /* Validate if the extracted address falls within Flash or SRAM */
+		uint8_t Local_uint8AddressValidStatus = uint8_ValidateAddress(Local_uint32Address);
+
+		/* Send ACK  */
+				voidSendACK(1u);
+		if(Local_uint8AddressValidStatus == VALID_ADDRESS)
+		{
+			/*Extract Payload Length */
+			uint8_t Local_uint8PayloadLength = copy_puint8CmdPacket[6] ;
+
+			/*Execute writing functionality */
+			Local_uint8WritingStatus =uint8_ExecuteMemoryWrite(&copy_puint8CmdPacket[7] ,Local_uint32Address ,Local_uint8PayloadLength);
+		}
+		else
+		{
+			Local_uint8WritingStatus = WRITING_ERROR ;
+		}
+		HAL_UART_Transmit(&huart2, &Local_uint8WritingStatus, 1, HAL_MAX_DELAY) ;
 
 	}
 	else

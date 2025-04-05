@@ -440,19 +440,19 @@ void Bootloader_JumpToUserApp(void)
 		     * The MSP value is stored at the first address of the application's Vector Table,
 		     * which is located at the base address of FLASH Sector 2.
     */
-	Local_uint32MSPVal =  *((volatile uint32_t*)FLASH_SECTOR2_BASE_ADDRESS);
+ 	Local_uint32MSPVal =  *((volatile uint32_t*)FLASH_SECTOR2_BASE_ADDRESS);
 
 	/*
 	     * Step 2: Load the User Application MSP value into the MSP register.
 	     * This ensures that the stack pointer is correctly set before executing the application.
     */
-	__asm volatile("MSR MSP ,%0"::"r"(Local_uint32MSPVal));
+	 __asm volatile("MSR MSP ,%0"::"r"(Local_uint32MSPVal));
 
 	/*
 	     * Step 3: Retrieve the Reset Handler address of the User Application.
 	     * This is stored at the second entry in the Vector Table (offset +4 from base address).
    */
-	ResetHandlerAddress = *((volatile uint32_t*)(FLASH_SECTOR2_BASE_ADDRESS+ 4));
+	 ResetHandlerAddress = *((volatile uint32_t*)(FLASH_SECTOR2_BASE_ADDRESS+ 4));
 	/*
 	     * Step 4: Assign the Reset Handler address to the function pointer.
 	     * This allows the program to jump to the application by calling this function.
